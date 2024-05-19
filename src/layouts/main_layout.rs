@@ -148,7 +148,7 @@ impl MainLayout {
                 self.audio_player.get_current_sound_position()
                     / self.audio_player.get_current_sound_duration(),
             )
-            .on_clicked(|portion| MainLayoutMessage::ChangeTrackPos(portion))
+            .on_clicked(MainLayoutMessage::ChangeTrackPos)
         })
         .style(container::Appearance {
             background: Some(Background::Color(Color {

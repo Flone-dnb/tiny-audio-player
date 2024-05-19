@@ -41,10 +41,7 @@ pub struct AudioPlayer {
 
 impl AudioPlayer {
     pub fn is_format_supported(extension: &str) -> bool {
-        return extension == "mp3"
-            || extension == "wav"
-            || extension == "ogg"
-            || extension == "flac";
+        extension == "mp3" || extension == "wav" || extension == "ogg" || extension == "flac"
     }
 
     pub fn new() -> Self {
@@ -115,6 +112,7 @@ impl AudioPlayer {
         Rc::new(Vec::new())
     }
 
+    /// Returns the number of seconds passed since the start of the sound.
     pub fn get_current_sound_position(&self) -> f64 {
         // Quit if no sound.
         if self.current_sound.is_none() {
@@ -126,6 +124,7 @@ impl AudioPlayer {
         sound_data.handle.position()
     }
 
+    /// Returns length of the sound in seconds.
     pub fn get_current_sound_duration(&self) -> f64 {
         // Quit if no sound.
         if self.current_sound.is_none() {
@@ -137,6 +136,7 @@ impl AudioPlayer {
         sound_data.duration
     }
 
+    /// Sets position of the sound in seconds.
     pub fn set_current_sound_pos(&mut self, pos: f64) {
         // Quit if no sound.
         if self.current_sound.is_none() {
@@ -148,6 +148,7 @@ impl AudioPlayer {
         sound_data.handle.seek_to(pos);
     }
 
+    /// Stops the sound (if playing).
     pub fn stop(&mut self) {
         // Quit if no sound.
         if self.current_sound.is_none() {
@@ -160,6 +161,8 @@ impl AudioPlayer {
         self.current_sound = None;
     }
 
+    /// Pauses or resumes the sound depending on its state.
+    /// Does nothing if no sound is playing.
     pub fn pause_resume(&mut self) {
         // Quit if no sound.
         if self.current_sound.is_none() {
@@ -175,6 +178,7 @@ impl AudioPlayer {
         }
     }
 
+    /// Sets volume of the sound as a multiplier where 1.0 is "no modification to the volume".
     pub fn set_volume(&mut self, volume: f64) {
         self.volume = volume;
 
@@ -183,10 +187,12 @@ impl AudioPlayer {
             .set_volume(Volume::Amplitude(volume), Tween::default())
     }
 
+    /// Returns volume multiplier.
     pub fn get_volume(&self) -> f64 {
         self.volume
     }
 
+    /// Sets playback speed multiplier where 1.0 is "original speed".
     pub fn set_playback_rate(&mut self, rate: f64) {
         self.playback_rate = rate;
 
@@ -202,6 +208,7 @@ impl AudioPlayer {
             .set_playback_rate(rate, Tween::default());
     }
 
+    /// Returns playback speed multiplier.
     pub fn get_playback_rate(&self) -> f64 {
         self.playback_rate
     }

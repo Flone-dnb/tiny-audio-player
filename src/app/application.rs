@@ -41,7 +41,7 @@ impl Application for ApplicationState {
         iced::theme::Theme::Custom(
             iced::theme::Custom::new(
                 "Dark Orange".to_string(),
-                crate::theme::theme::dark_orange_palette(),
+                crate::theme::style::dark_orange_palette(),
             )
             .into(),
         )
@@ -75,7 +75,7 @@ impl Application for ApplicationState {
                             .update(MainLayoutMessage::FileDropped(path));
                     }
 
-                    return Command::none();
+                    Command::none()
                 }
                 _ => Command::none(),
             },

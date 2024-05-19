@@ -30,7 +30,7 @@ impl<Message> TrackPosSlider<Message> {
     }
 }
 
-impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer> for TrackPosSlider<Message>
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for TrackPosSlider<Message>
 where
     Renderer: renderer::Renderer,
 {
@@ -61,18 +61,15 @@ where
         shell: &mut iced::advanced::Shell<'_, Message>,
         _viewport: &Rectangle,
     ) -> iced::advanced::graphics::core::event::Status {
-        match event {
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                if let Some(on_clicked) = self.on_clicked.as_mut() {
-                    if let Some(relative_pos) = cursor.position_in(layout.bounds()) {
-                        shell.publish(on_clicked(relative_pos.x / layout.bounds().width));
-                    }
+        if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
+            if let Some(on_clicked) = self.on_clicked.as_mut() {
+                if let Some(relative_pos) = cursor.position_in(layout.bounds()) {
+                    shell.publish(on_clicked(relative_pos.x / layout.bounds().width));
                 }
             }
-            _ => {}
         }
 
-        return event::Status::Ignored;
+        event::Status::Ignored
     }
 
     fn draw(
@@ -109,7 +106,7 @@ where
                     },
                     shadow: Shadow::default(),
                 },
-                theme::theme::get_primary_color(),
+                theme::style::get_primary_color(),
             );
         }
 
