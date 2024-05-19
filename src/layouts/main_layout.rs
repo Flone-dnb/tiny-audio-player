@@ -3,11 +3,16 @@ use iced::{
     widget::{container, Button, Column, Container, MouseArea, Row, Scrollable, Slider, Text},
     Background, Border, Color, Command, Element, Length, Renderer, Theme,
 };
-use native_dialog::FileDialog;
+use native_dialog::{FileDialog, MessageDialog, MessageType};
 use std::path::{Path, PathBuf};
 
 use crate::{
-    app::application::ApplicationMessage, audio::audio_player::AudioPlayer, misc::settings::*,
+    app::application::ApplicationMessage,
+    audio::audio_player::AudioPlayer,
+    misc::{
+        config_manger::{ConfigManager, TracklistConfig, TRACKLIST_EXTENSION},
+        settings::*,
+    },
     widgets::track_pos_slider::TrackPosSlider,
 };
 
@@ -32,6 +37,8 @@ pub enum MainLayoutMessage {
     PlayTrackFromStart(usize),
     DeleteTrack(usize),
     ChangeTrackPos(f32),
+    OpenTracklist,
+    SaveTracklist,
     RedrawTrackPos,
     AddMusic,
     FileDropped(PathBuf),
@@ -182,11 +189,35 @@ impl MainLayout {
         .width(Length::Fill)
         .height(Length::FillPortion(TRACK_POS_HEIGHT_PORTION));
 
+        // Prepare bottom block.
+        let bottom_block = Column::new().push(
+            Row::new()
+                .push(
+                    Button::new(
+                        Text::new("Save Tracklist")
+                            .horizontal_alignment(Horizontal::Center)
+                            .size(TEXT_SIZE),
+                    )
+                    .width(Length::Fill)
+                    .on_press(MainLayoutMessage::SaveTracklist),
+                )
+                .spacing(HORIZONTAL_ELEMENT_SPACING)
+                .push(
+                    Button::new(
+                        Text::new("Open Tracklist")
+                            .horizontal_alignment(Horizontal::Center)
+                            .size(TEXT_SIZE),
+                    )
+                    .width(Length::Fill)
+                    .on_press(MainLayoutMessage::OpenTracklist),
+                ),
+        );
+
         // Remove this block when Iced adds support for drag and drop on Linux.
         let temp_add_track_block = Button::new(
             Text::new("Drag and drop files here or click to add music...")
-                .size(TEXT_SIZE)
-                .horizontal_alignment(Horizontal::Center),
+                .horizontal_alignment(Horizontal::Center)
+                .size(TEXT_SIZE),
         )
         .width(Length::Fill)
         .on_press(MainLayoutMessage::AddMusic);
@@ -196,6 +227,7 @@ impl MainLayout {
             .push(top_block)
             .push(track_pos_block)
             .push(tracklist_block)
+            .push(bottom_block)
             .push(temp_add_track_block)
             .spacing(VERTICAL_ELEMENT_SPACING)
             .padding(10)
@@ -289,9 +321,61 @@ impl MainLayout {
             MainLayoutMessage::FileDropped(path) => {
                 self.try_importing_track_from_path(path.as_path())
             }
+            MainLayoutMessage::OpenTracklist => {
+                // Ask for path.
+                let path = FileDialog::new()
+                    .add_filter("Tracklist", &[TRACKLIST_EXTENSION])
+                    .show_open_single_file()
+                    .unwrap();
+                if let Some(path) = path {
+                    let path = path.as_path().display().to_string();
+
+                    // Load sound paths.
+                    let config = ConfigManager::load_tracklist(&path);
+
+                    self.clear_tracklist();
+
+                    // Import paths.
+                    for path in config.paths {
+                        self.try_importing_track_from_path(PathBuf::from(path.as_str()).as_path())
+                    }
+                }
+            }
+            MainLayoutMessage::SaveTracklist => {
+                // Make sure the tracklist is not empty.
+                if self.tracklist.is_empty() {
+                    MessageDialog::new()
+                        .set_type(MessageType::Info)
+                        .set_title("Info")
+                        .set_text("Tracklist is empty - there is nothing to save!")
+                        .show_alert()
+                        .unwrap();
+                    return Command::none();
+                }
+
+                // Ask for path.
+                let path = FileDialog::new()
+                    .add_filter("Tracklist", &[TRACKLIST_EXTENSION])
+                    .show_save_single_file()
+                    .unwrap();
+                if let Some(path) = path {
+                    let mut config = TracklistConfig::new();
+                    config.paths = Vec::with_capacity(self.tracklist.len());
+                    for track_info in &self.tracklist {
+                        config.paths.push(track_info.path.clone());
+                    }
+                    ConfigManager::save_tracklist(&path.as_path().display().to_string(), config);
+                }
+            }
         }
 
         Command::none()
+    }
+
+    fn clear_tracklist(&mut self) {
+        self.audio_player.stop();
+        self.current_track_index = None;
+        self.tracklist.clear();
     }
 
     fn try_importing_track_from_path(&mut self, path: &Path) {
