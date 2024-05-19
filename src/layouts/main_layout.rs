@@ -136,28 +136,37 @@ impl MainLayout {
                         a: WIDGET_BACKGROUND_DARK_ALPHA,
                         ..Color::BLACK
                     })),
-                    border: Border::with_radius(5),
+                    border: Border {
+                        color: crate::theme::style::get_primary_color(),
+                        width: 1.0,
+                        radius: BORDER_RADIUS.into(),
+                    },
                     ..container::Appearance::default()
                 })
                 .width(Length::Fill)
                 .height(Length::FillPortion(TRACKLIST_HEIGHT_PORTION));
 
         // Prepare track position block.
-        let track_pos_block = Container::new({
+        let track_pos_block = Container::new(
             TrackPosSlider::new(
                 self.audio_player.get_current_sound_wave(),
                 self.audio_player.get_current_sound_position()
                     / self.audio_player.get_current_sound_duration(),
             )
             .on_clicked(MainLayoutMessage::ChangeTrackPos)
-            .on_redraw(|| MainLayoutMessage::RedrawTrackPos)
-        })
+            .on_redraw(|| MainLayoutMessage::RedrawTrackPos),
+        )
+        .padding(1)
         .style(container::Appearance {
             background: Some(Background::Color(Color {
                 a: WIDGET_BACKGROUND_DARK_ALPHA,
                 ..Color::BLACK
             })),
-            border: Border::with_radius(5),
+            border: Border {
+                color: crate::theme::style::get_primary_color(),
+                width: 1.0,
+                radius: BORDER_RADIUS.into(),
+            },
             ..container::Appearance::default()
         })
         .width(Length::Fill)
