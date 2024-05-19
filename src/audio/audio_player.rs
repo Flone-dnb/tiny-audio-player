@@ -135,8 +135,8 @@ impl AudioPlayer {
         // Store the track identifier, it will be used to filter packets.
         let track_id = track.id;
 
-        let sample_count_to_average: usize = 50;
-        let mut samples_to_average: Vec<f32> = Vec::with_capacity(sample_count_to_average);
+        let packet_count_to_average: usize = 20;
+        let mut packets_to_average: Vec<f32> = Vec::with_capacity(packet_count_to_average);
 
         // The decode loop.
         loop {
@@ -196,16 +196,16 @@ impl AudioPlayer {
                     mean_value /= read_samples.len() as f32;
 
                     // Update "processed" count.
-                    samples_to_average.push(mean_value);
+                    packets_to_average.push(mean_value);
 
-                    if samples_to_average.len() >= sample_count_to_average {
+                    if packets_to_average.len() >= packet_count_to_average {
                         // Average all samples.
                         let mut average_value = 0.0;
-                        for value in &samples_to_average {
+                        for value in &packets_to_average {
                             average_value += value;
                         }
-                        average_value /= samples_to_average.len() as f32;
-                        samples_to_average.clear();
+                        average_value /= packets_to_average.len() as f32;
+                        packets_to_average.clear();
 
                         // Add as a final sample.
                         {

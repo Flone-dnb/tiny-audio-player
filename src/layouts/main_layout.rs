@@ -64,8 +64,18 @@ impl MainLayout {
                                 Some(index) => &self.tracklist[index].name,
                             }
                         })
-                        .size(BIG_TEXT_SIZE)
-                        .vertical_alignment(Vertical::Center),
+                        .size(TEXT_SIZE),
+                    )
+                    .spacing(VERTICAL_ELEMENT_SPACING)
+                    .push(
+                        Text::new(format!(
+                            "Time: {}:{} / {}:{}",
+                            self.audio_player.get_current_sound_position() as usize / 60,
+                            self.audio_player.get_current_sound_position() as usize % 60,
+                            self.audio_player.get_current_sound_duration() as usize / 60,
+                            self.audio_player.get_current_sound_duration() as usize % 60
+                        ))
+                        .size(TEXT_SIZE),
                     )
                     .width(Length::FillPortion(TITLE_BLOCK_PORTION)),
             )
