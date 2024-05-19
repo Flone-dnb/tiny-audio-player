@@ -24,6 +24,7 @@ const TRACK_POS_HEIGHT_PORTION: u16 = 2;
 const TRACKLIST_HEIGHT_PORTION: u16 = 7;
 const WIDGET_BACKGROUND_DARK_ALPHA: f32 = 0.4;
 
+#[derive(Clone)]
 struct TrackInfo {
     name: String,
     path: String,
@@ -37,6 +38,8 @@ pub enum MainLayoutMessage {
     PlayTrackFromStart(usize),
     DeleteTrack(usize),
     ChangeTrackPos(f32),
+    MoveTrackUp(usize),
+    MoveTrackDown(usize),
     OpenTracklist,
     SaveTracklist,
     RedrawTrackPos,
@@ -136,13 +139,26 @@ impl MainLayout {
         for (id, track) in self.tracklist.iter().enumerate() {
             tracklist_column = tracklist_column
                 .push(
-                    MouseArea::new(
-                        Button::new(Text::new(track.name.as_str()).size(TEXT_SIZE))
-                            .width(Length::Fill)
-                            .on_press(MainLayoutMessage::PlayPauseTrack(id)),
-                    )
-                    .on_right_press(MainLayoutMessage::DeleteTrack(id))
-                    .on_middle_press(MainLayoutMessage::PlayTrackFromStart(id)),
+                    Row::new()
+                        .push(
+                            Button::new(Text::new("<").size(TEXT_SIZE))
+                                .on_press(MainLayoutMessage::MoveTrackUp(id)),
+                        )
+                        .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
+                        .push(
+                            MouseArea::new(
+                                Button::new(Text::new(track.name.as_str()).size(TEXT_SIZE))
+                                    .width(Length::Fill)
+                                    .on_press(MainLayoutMessage::PlayPauseTrack(id)),
+                            )
+                            .on_right_press(MainLayoutMessage::DeleteTrack(id))
+                            .on_middle_press(MainLayoutMessage::PlayTrackFromStart(id)),
+                        )
+                        .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
+                        .push(
+                            Button::new(Text::new(">").size(TEXT_SIZE))
+                                .on_press(MainLayoutMessage::MoveTrackDown(id)),
+                        ),
                 )
                 .spacing(VERTICAL_ELEMENT_SPACING);
         }
@@ -309,6 +325,76 @@ impl MainLayout {
                         // Play it.
                         self.audio_player
                             .play(self.tracklist[track_index].path.as_str());
+                    }
+                }
+            }
+            MainLayoutMessage::MoveTrackUp(track_index) => {
+                // Quit if only 1 track.
+                if self.tracklist.len() == 1 {
+                    return Command::none();
+                }
+
+                let mut _target_track_index = 0;
+                if track_index == 0 {
+                    // Swap first and last.
+                    _target_track_index = self.tracklist.len() - 1;
+                } else {
+                    // Swap with upper track.
+                    _target_track_index = track_index - 1;
+                }
+
+                // Swap tracks.
+                let temp = self.tracklist[_target_track_index].clone();
+                self.tracklist[_target_track_index] = self.tracklist[track_index].clone();
+                self.tracklist[track_index] = temp;
+
+                // Update current if moved current played track.
+                if let Some(current_index) = self.current_track_index {
+                    if current_index == track_index {
+                        // Moved current.
+                        self.current_track_index = Some(_target_track_index);
+                    } else if current_index == _target_track_index {
+                        // Moved some track to current.
+                        if _target_track_index == self.tracklist.len() - 1 {
+                            self.current_track_index = Some(0);
+                        } else {
+                            self.current_track_index = Some(current_index + 1);
+                        }
+                    }
+                }
+            }
+            MainLayoutMessage::MoveTrackDown(track_index) => {
+                // Quit if only 1 track.
+                if self.tracklist.len() == 1 {
+                    return Command::none();
+                }
+
+                let mut _target_track_index = 0;
+                if track_index == self.tracklist.len() - 1 {
+                    // Swap last and first.
+                    _target_track_index = 0;
+                } else {
+                    // Swap with lower track.
+                    _target_track_index = track_index + 1;
+                }
+
+                // Swap tracks.
+                let temp = self.tracklist[_target_track_index].clone();
+                self.tracklist[_target_track_index] = self.tracklist[track_index].clone();
+                self.tracklist[track_index] = temp;
+
+                // Update current if moved current played track.
+                if let Some(current_index) = self.current_track_index {
+                    if current_index == track_index {
+                        // Moved current.
+                        self.current_track_index = Some(_target_track_index);
+                    } else if current_index == _target_track_index {
+                        // Moved some track to current.
+                        if _target_track_index == 0 {
+                            self.current_track_index = Some(self.tracklist.len() - 1);
+                        } else {
+                            self.current_track_index = Some(current_index - 1);
+                        }
                     }
                 }
             }
