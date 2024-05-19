@@ -100,7 +100,7 @@ impl MainLayout {
                     .spacing(VERTICAL_ELEMENT_SPACING)
                     .push(
                         Slider::new(
-                            0.0..=2.0,
+                            0.4..=1.4,
                             self.audio_player.get_playback_rate(),
                             MainLayoutMessage::PlaybackRateChanged,
                         )
