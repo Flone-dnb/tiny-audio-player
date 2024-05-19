@@ -251,7 +251,24 @@ impl MainLayout {
                 portion as f64 * self.audio_player.get_current_sound_duration(),
             ),
             MainLayoutMessage::RedrawTrackPos => {
-                // Nothing here.
+                if let Some(mut track_index) = self.current_track_index {
+                    if self.audio_player.get_current_sound_position() + 0.01
+                        >= self.audio_player.get_current_sound_duration()
+                    {
+                        // Switch to the next track.
+                        if track_index + 1 == self.tracklist.len() {
+                            track_index = 0;
+                        } else {
+                            track_index = track_index + 1;
+                        }
+
+                        self.current_track_index = Some(track_index);
+
+                        // Play it.
+                        self.audio_player
+                            .play(self.tracklist[track_index].path.as_str());
+                    }
+                }
             }
             MainLayoutMessage::AddMusic => {
                 let paths = FileDialog::new().show_open_multiple_file().unwrap();
