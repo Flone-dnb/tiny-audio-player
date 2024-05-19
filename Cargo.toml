@@ -9,3 +9,4 @@ license = "MIT"
 iced = {version = "0.12.1", features = ["advanced"]}
 native-dialog = "0.7.0"
 kira = "0.9.0"
+symphonia = {version = "0.5.4", features = ["all-formats"]}

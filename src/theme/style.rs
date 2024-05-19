@@ -11,5 +11,5 @@ pub fn dark_orange_palette() -> Palette {
 }
 
 pub fn get_primary_color() -> Color {
-    Color::from_rgb8(155, 65, 0)
+    Color::from_rgb8(145, 65, 0)
 }

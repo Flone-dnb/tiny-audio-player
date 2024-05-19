@@ -5,7 +5,7 @@ use iced::advanced::widget::{self, Widget};
 use iced::window::{self};
 use iced::{mouse, Element, Event, Shadow};
 use iced::{Border, Color, Length, Rectangle, Size};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::time::Instant;
 
@@ -14,7 +14,7 @@ use crate::theme;
 const UPDATE_INTERVAL_MS: u64 = 250;
 
 pub struct TrackPosSlider<Message> {
-    audio_data: Rc<Vec<i8>>,
+    audio_data: Arc<Mutex<Vec<u8>>>,
     current_pos_portion: f64,
     on_clicked: Option<Box<dyn FnMut(f32) -> Message>>,
     on_redraw: Option<Box<dyn FnMut() -> Message>>,
@@ -22,7 +22,7 @@ pub struct TrackPosSlider<Message> {
 }
 
 impl<Message> TrackPosSlider<Message> {
-    pub fn new(audio_data: Rc<Vec<i8>>, current_pos_portion: f64) -> Self {
+    pub fn new(audio_data: Arc<Mutex<Vec<u8>>>, current_pos_portion: f64) -> Self {
         Self {
             audio_data,
             current_pos_portion,
@@ -123,12 +123,14 @@ where
         _cursor: mouse::Cursor,
         _viewport: &Rectangle,
     ) {
+        let audio_data = self.audio_data.lock().unwrap();
+
         let layout_bounds = layout.bounds();
-        let step_width = layout_bounds.width / self.audio_data.len() as f32;
+        let step_width = layout_bounds.width / audio_data.len() as f32;
 
         // Draw wave.
-        for (i, sample) in self.audio_data.iter().enumerate() {
-            let portion = sample.abs() as f32 / i8::MAX as f32;
+        for (i, sample) in audio_data.iter().enumerate() {
+            let portion = *sample as f32 / u8::MAX as f32;
             let sample_height = layout_bounds.height * portion;
 
             // Draw a quad that represents this "sample".
