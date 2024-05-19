@@ -42,8 +42,8 @@ pub enum MainLayoutMessage {
     MoveTrackDown(usize),
     OpenTracklist,
     SaveTracklist,
-    RedrawTrackPos,
     AddMusic,
+    Update,
     FileDropped(PathBuf),
 }
 
@@ -186,8 +186,7 @@ impl MainLayout {
                 self.audio_player.get_current_sound_position()
                     / self.audio_player.get_current_sound_duration(),
             )
-            .on_clicked(MainLayoutMessage::ChangeTrackPos)
-            .on_redraw(|| MainLayoutMessage::RedrawTrackPos),
+            .on_clicked(MainLayoutMessage::ChangeTrackPos),
         )
         .padding(1)
         .style(container::Appearance {
@@ -308,7 +307,7 @@ impl MainLayout {
             MainLayoutMessage::ChangeTrackPos(portion) => self.audio_player.set_current_sound_pos(
                 portion as f64 * self.audio_player.get_current_sound_duration(),
             ),
-            MainLayoutMessage::RedrawTrackPos => {
+            MainLayoutMessage::Update => {
                 if let Some(mut track_index) = self.current_track_index {
                     if self.audio_player.get_current_sound_position() + 0.01
                         >= self.audio_player.get_current_sound_duration()

@@ -6,9 +6,10 @@ authors = ["Alexander Tretyakov"]
 license = "MIT"
 
 [dependencies]
-iced = {version = "0.12.1", features = ["advanced"]}
+iced = {version = "0.12.1", features = ["advanced", "smol"]}
 native-dialog = "0.7.0"
 kira = "0.9.0"
 symphonia = {version = "0.5.4", features = ["all-formats"]}
 toml = "0.8.13"
 serde = { version = "1.0.202", features = ["derive"] }
+chrono = "0.4.38"

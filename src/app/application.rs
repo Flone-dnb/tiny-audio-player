@@ -1,8 +1,11 @@
+use crate::layouts::main_layout::*;
 use iced::{
     event, executor, window, Application, Command, Element, Event, Renderer, Subscription, Theme,
 };
+use std::time::Instant;
 
-use crate::layouts::main_layout::*;
+// Send "wake up" messages N times in a second.
+const APP_UPDATE_RATE: u64 = 4;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Layout {
@@ -12,6 +15,7 @@ pub enum Layout {
 #[derive(Debug, Clone)]
 pub enum ApplicationMessage {
     MainLayoutMessage(MainLayoutMessage),
+    Update(Instant),
     OsEvent(Event),
 }
 
@@ -63,6 +67,7 @@ impl Application for ApplicationState {
     fn update(&mut self, message: ApplicationMessage) -> Command<ApplicationMessage> {
         match message {
             ApplicationMessage::MainLayoutMessage(message) => self.main_layout.update(message),
+            ApplicationMessage::Update(_) => self.main_layout.update(MainLayoutMessage::Update),
             ApplicationMessage::OsEvent(os_event) => match os_event {
                 Event::Window(_, event) => {
                     if let window::Event::FileHovered(_) = event {
@@ -83,6 +88,9 @@ impl Application for ApplicationState {
     }
 
     fn subscription(&self) -> Subscription<ApplicationMessage> {
-        event::listen().map(ApplicationMessage::OsEvent)
+        let tick = iced::time::every(std::time::Duration::from_millis(1000 / APP_UPDATE_RATE))
+            .map(ApplicationMessage::Update);
+
+        Subscription::batch(vec![tick, event::listen().map(ApplicationMessage::OsEvent)])
     }
 }

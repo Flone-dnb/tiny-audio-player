@@ -2,23 +2,17 @@ use iced::advanced::graphics::core::event;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
-use iced::window::{self};
 use iced::{mouse, Element, Event, Shadow};
 use iced::{Border, Color, Length, Rectangle, Size};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use std::time::Instant;
 
 use crate::theme;
-
-const UPDATE_INTERVAL_MS: u64 = 250;
 
 pub struct TrackPosSlider<Message> {
     audio_data: Arc<Mutex<Vec<u8>>>,
     current_pos_portion: f64,
     on_clicked: Option<Box<dyn FnMut(f32) -> Message>>,
     on_redraw: Option<Box<dyn FnMut() -> Message>>,
-    last_update_time: Instant,
 }
 
 impl<Message> TrackPosSlider<Message> {
@@ -28,7 +22,6 @@ impl<Message> TrackPosSlider<Message> {
             current_pos_portion,
             on_clicked: None,
             on_redraw: None,
-            last_update_time: Instant::now(),
         }
     }
 
@@ -76,37 +69,12 @@ where
         shell: &mut iced::advanced::Shell<'_, Message>,
         _viewport: &Rectangle,
     ) -> iced::advanced::graphics::core::event::Status {
-        // Process redraw.
-        if let Event::Window(_, window::Event::RedrawRequested(now)) = event {
-            // Request a new redraw of this widget later.
-            shell.request_redraw(window::RedrawRequest::At(
-                now + Duration::from_millis(UPDATE_INTERVAL_MS),
-            ));
-
-            if self.last_update_time.elapsed().as_millis() > UPDATE_INTERVAL_MS as u128 {
-                self.last_update_time = Instant::now();
-
-                // Trigger a full redraw.
-                if let Some(on_redraw) = self.on_redraw.as_mut() {
-                    shell.publish(on_redraw());
-                }
-            }
-
-            return event::Status::Ignored;
-        }
-
         // Process mouse.
         if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
             if let Some(on_clicked) = self.on_clicked.as_mut() {
                 if let Some(relative_pos) = cursor.position_in(layout.bounds()) {
                     shell.publish(on_clicked(relative_pos.x / layout.bounds().width));
                 }
-            }
-        } else {
-            // Trigger a full redraw.
-            self.last_update_time = Instant::now();
-            if let Some(on_redraw) = self.on_redraw.as_mut() {
-                shell.publish(on_redraw());
             }
         }
 
