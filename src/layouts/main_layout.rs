@@ -284,7 +284,7 @@ impl MainLayout {
 
                 // Update current index (if deleted not the current track).
                 if let Some(index) = self.current_track_index {
-                    if index >= self.tracklist.len() {
+                    if index >= track_index {
                         self.current_track_index = Some(index - 1);
                     }
                 }
