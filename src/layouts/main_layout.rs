@@ -32,6 +32,7 @@ pub enum MainLayoutMessage {
     PlayTrackFromStart(usize),
     DeleteTrack(usize),
     ChangeTrackPos(f32),
+    RedrawTrackPos,
     AddMusic,
     FileDropped(PathBuf),
 }
@@ -149,6 +150,7 @@ impl MainLayout {
                     / self.audio_player.get_current_sound_duration(),
             )
             .on_clicked(MainLayoutMessage::ChangeTrackPos)
+            .on_redraw(|| MainLayoutMessage::RedrawTrackPos)
         })
         .style(container::Appearance {
             background: Some(Background::Color(Color {
@@ -239,6 +241,9 @@ impl MainLayout {
             MainLayoutMessage::ChangeTrackPos(portion) => self.audio_player.set_current_sound_pos(
                 portion as f64 * self.audio_player.get_current_sound_duration(),
             ),
+            MainLayoutMessage::RedrawTrackPos => {
+                // Nothing here.
+            }
             MainLayoutMessage::AddMusic => {
                 let paths = FileDialog::new().show_open_multiple_file().unwrap();
                 for path in paths {
