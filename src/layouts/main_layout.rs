@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     app::application::ApplicationMessage, audio::audio_player::AudioPlayer, misc::settings::*,
+    widgets::track_pos_slider::TrackPosSlider,
 };
 
 // Layout customization.
@@ -16,6 +17,7 @@ const PLAYBACK_RATE_BLOCK_PORTION: u16 = 4;
 const VOLUME_BLOCK_PORTION: u16 = 4;
 const TRACK_POS_HEIGHT_PORTION: u16 = 2;
 const TRACKLIST_HEIGHT_PORTION: u16 = 7;
+const WIDGET_BACKGROUND_DARK_ALPHA: f32 = 0.4;
 
 struct TrackInfo {
     name: String,
@@ -29,6 +31,7 @@ pub enum MainLayoutMessage {
     PlayPauseTrack(usize),
     PlayTrackFromStart(usize),
     DeleteTrack(usize),
+    ChangeTrackPos(f32),
     AddMusic,
     FileDropped(PathBuf),
 }
@@ -129,7 +132,7 @@ impl MainLayout {
             Container::new(Scrollable::new(tracklist_column.padding(10)).height(Length::Fill))
                 .style(container::Appearance {
                     background: Some(Background::Color(Color {
-                        a: 0.3,
+                        a: WIDGET_BACKGROUND_DARK_ALPHA,
                         ..Color::BLACK
                     })),
                     border: Border::with_radius(5),
@@ -139,16 +142,24 @@ impl MainLayout {
                 .height(Length::FillPortion(TRACKLIST_HEIGHT_PORTION));
 
         // Prepare track position block.
-        let track_pos_block = Container::new(Column::new().width(Length::Fill))
-            .style(container::Appearance {
-                background: Some(Background::Color(Color {
-                    a: 0.3,
-                    ..Color::BLACK
-                })),
-                border: Border::with_radius(5),
-                ..container::Appearance::default()
-            })
-            .height(Length::FillPortion(TRACK_POS_HEIGHT_PORTION));
+        let track_pos_block = Container::new({
+            TrackPosSlider::new(
+                self.audio_player.get_current_sound_wave(),
+                self.audio_player.get_current_sound_position()
+                    / self.audio_player.get_current_sound_duration(),
+            )
+            .on_clicked(|portion| MainLayoutMessage::ChangeTrackPos(portion))
+        })
+        .style(container::Appearance {
+            background: Some(Background::Color(Color {
+                a: WIDGET_BACKGROUND_DARK_ALPHA,
+                ..Color::BLACK
+            })),
+            border: Border::with_radius(5),
+            ..container::Appearance::default()
+        })
+        .width(Length::Fill)
+        .height(Length::FillPortion(TRACK_POS_HEIGHT_PORTION));
 
         // Remove this block when Iced adds support for drag and drop on Linux.
         let temp_add_track_block = Button::new(
@@ -225,6 +236,9 @@ impl MainLayout {
                     }
                 }
             }
+            MainLayoutMessage::ChangeTrackPos(portion) => self.audio_player.set_current_sound_pos(
+                portion as f64 * self.audio_player.get_current_sound_duration(),
+            ),
             MainLayoutMessage::AddMusic => {
                 let paths = FileDialog::new().show_open_multiple_file().unwrap();
                 for path in paths {

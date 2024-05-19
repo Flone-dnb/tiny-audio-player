@@ -8,10 +8,33 @@ use kira::{
     Volume,
 };
 use native_dialog::MessageDialog;
+use std::rc::Rc;
+
+pub struct CurrentSoundData {
+    pub handle: StreamingSoundHandle<kira::sound::FromFileError>,
+    pub wave: Rc<Vec<i8>>,
+    pub duration: f64,
+}
+
+impl CurrentSoundData {
+    pub fn new(handle: StreamingSoundHandle<kira::sound::FromFileError>, duration: f64) -> Self {
+        // Generate some fake wave data.
+        let mut wave_data: Vec<i8> = Vec::new();
+        for i in 0..100 {
+            wave_data.push((((i as f32 / 5.0).sin() / 2.0 + 0.5) * i8::MAX as f32) as i8);
+        }
+
+        Self {
+            handle,
+            wave: Rc::new(wave_data),
+            duration,
+        }
+    }
+}
 
 pub struct AudioPlayer {
     audio_manager: AudioManager,
-    current_sound: Option<StreamingSoundHandle<kira::sound::FromFileError>>,
+    current_sound: Option<CurrentSoundData>,
     playback_rate: f64,
     volume: f64,
 }
@@ -48,8 +71,8 @@ impl AudioPlayer {
 
     pub fn play(&mut self, path: &str) {
         // Stop any sound if we are playing.
-        if let Some(handle) = self.current_sound.as_mut() {
-            handle.stop(Tween::default());
+        if let Some(data) = self.current_sound.as_mut() {
+            data.handle.stop(Tween::default());
         }
 
         // Create sound data.
@@ -65,9 +88,11 @@ impl AudioPlayer {
             Ok(data) => data,
         };
 
+        let duration = sound_data.duration();
+
         // Play sound.
         self.current_sound = match self.audio_manager.play(sound_data) {
-            Ok(handle) => Some(handle),
+            Ok(handle) => Some(CurrentSoundData::new(handle, duration.as_secs() as f64)),
             Err(msg) => {
                 MessageDialog::new()
                     .set_title("Critical error")
@@ -82,15 +107,56 @@ impl AudioPlayer {
         self.set_playback_rate(self.playback_rate);
     }
 
+    pub fn get_current_sound_wave(&self) -> Rc<Vec<i8>> {
+        if let Some(data) = &self.current_sound {
+            return data.wave.clone();
+        }
+
+        Rc::new(Vec::new())
+    }
+
+    pub fn get_current_sound_position(&self) -> f64 {
+        // Quit if no sound.
+        if self.current_sound.is_none() {
+            return 0.0;
+        }
+
+        let sound_data = self.current_sound.as_ref().unwrap();
+
+        sound_data.handle.position()
+    }
+
+    pub fn get_current_sound_duration(&self) -> f64 {
+        // Quit if no sound.
+        if self.current_sound.is_none() {
+            return 0.0;
+        }
+
+        let sound_data = self.current_sound.as_ref().unwrap();
+
+        sound_data.duration
+    }
+
+    pub fn set_current_sound_pos(&mut self, pos: f64) {
+        // Quit if no sound.
+        if self.current_sound.is_none() {
+            return;
+        }
+
+        let sound_data = self.current_sound.as_mut().unwrap();
+
+        sound_data.handle.seek_to(pos);
+    }
+
     pub fn stop(&mut self) {
         // Quit if no sound.
         if self.current_sound.is_none() {
             return;
         }
 
-        let sound = self.current_sound.as_mut().unwrap();
+        let sound_data = self.current_sound.as_mut().unwrap();
 
-        sound.stop(Tween::default());
+        sound_data.handle.stop(Tween::default());
         self.current_sound = None;
     }
 
@@ -100,12 +166,12 @@ impl AudioPlayer {
             return;
         }
 
-        let sound = self.current_sound.as_mut().unwrap();
+        let sound_data = self.current_sound.as_mut().unwrap();
 
-        if sound.state() == PlaybackState::Paused {
-            sound.resume(Tween::default());
+        if sound_data.handle.state() == PlaybackState::Paused {
+            sound_data.handle.resume(Tween::default());
         } else {
-            sound.pause(Tween::default());
+            sound_data.handle.pause(Tween::default());
         }
     }
 
@@ -132,6 +198,7 @@ impl AudioPlayer {
         self.current_sound
             .as_mut()
             .unwrap()
+            .handle
             .set_playback_rate(rate, Tween::default());
     }
 

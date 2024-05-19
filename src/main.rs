@@ -12,6 +12,7 @@ mod audio;
 mod layouts;
 mod misc;
 mod theme;
+mod widgets;
 
 fn main() -> iced::Result {
     // Prepare initial window size.

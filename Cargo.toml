@@ -6,6 +6,6 @@ authors = ["Alexander Tretyakov"]
 license = "MIT"
 
 [dependencies]
-iced = "0.12.1"
+iced = {version = "0.12.1", features = ["advanced"]}
 native-dialog = "0.7.0"
 kira = "0.9.0"
