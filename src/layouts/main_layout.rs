@@ -259,7 +259,7 @@ impl MainLayout {
                         if track_index + 1 == self.tracklist.len() {
                             track_index = 0;
                         } else {
-                            track_index = track_index + 1;
+                            track_index += 1;
                         }
 
                         self.current_track_index = Some(track_index);

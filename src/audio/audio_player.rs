@@ -193,7 +193,7 @@ impl AudioPlayer {
                     for sample in read_samples {
                         mean_value += sample.abs();
                     }
-                    mean_value = mean_value / read_samples.len() as f32;
+                    mean_value /= read_samples.len() as f32;
 
                     // Update "processed" count.
                     samples_to_average.push(mean_value);
@@ -204,7 +204,7 @@ impl AudioPlayer {
                         for value in &samples_to_average {
                             average_value += value;
                         }
-                        average_value = average_value / samples_to_average.len() as f32;
+                        average_value /= samples_to_average.len() as f32;
                         samples_to_average.clear();
 
                         // Add as a final sample.
