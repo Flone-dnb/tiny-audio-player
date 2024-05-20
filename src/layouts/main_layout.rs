@@ -1,3 +1,4 @@
+use iced::widget::svg;
 use iced::{
     alignment::{Horizontal, Vertical},
     widget::{container, Button, Column, Container, MouseArea, Row, Scrollable, Slider, Text},
@@ -34,12 +35,12 @@ struct TrackInfo {
 pub enum MainLayoutMessage {
     VolumeChanged(f64),
     PlaybackRateChanged(f64),
-    PlayPauseTrack(usize),
     PlayTrackFromStart(usize),
     DeleteTrack(usize),
     ChangeTrackPos(f32),
     MoveTrackUp(usize),
     MoveTrackDown(usize),
+    PlayPauseCurrentTrack,
     OpenTracklist,
     SaveTracklist,
     AddMusic,
@@ -134,6 +135,71 @@ impl MainLayout {
                     .width(Length::FillPortion(VOLUME_BLOCK_PORTION)),
             );
 
+        // Prepare track position block.
+        let track_pos_block = Container::new(
+            TrackPosSlider::new(
+                self.audio_player.get_current_sound_wave(),
+                self.audio_player.get_current_sound_position()
+                    / self.audio_player.get_current_sound_duration(),
+            )
+            .on_clicked(MainLayoutMessage::ChangeTrackPos),
+        )
+        .padding(1)
+        .style(container::Appearance {
+            background: Some(Background::Color(Color {
+                a: WIDGET_BACKGROUND_DARK_ALPHA,
+                ..Color::BLACK
+            })),
+            border: Border {
+                color: crate::theme::style::get_primary_color(),
+                width: 1.0,
+                radius: BORDER_RADIUS.into(),
+            },
+            ..container::Appearance::default()
+        })
+        .width(Length::Fill)
+        .height(Length::FillPortion(TRACK_POS_HEIGHT_PORTION));
+
+        let play_pause_svg_handle =
+            svg::Handle::from_path(format!("{}/res/play-pause.svg", env!("CARGO_MANIFEST_DIR")));
+
+        // Prepare block above tracklist.
+        let above_tracklist_block = Column::new()
+            .push(
+                Row::new()
+                    .push(
+                        Button::new(
+                            Text::new("Save Tracklist")
+                                .horizontal_alignment(Horizontal::Center)
+                                .size(TEXT_SIZE),
+                        )
+                        .height(Length::FillPortion(1))
+                        .width(Length::Fill)
+                        .on_press(MainLayoutMessage::SaveTracklist),
+                    )
+                    .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
+                    .push(
+                        Button::new(
+                            svg(play_pause_svg_handle)
+                                .width(Length::Shrink)
+                                .height(Length::FillPortion(1)),
+                        )
+                        .on_press(MainLayoutMessage::PlayPauseCurrentTrack),
+                    )
+                    .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
+                    .push(
+                        Button::new(
+                            Text::new("Open Tracklist")
+                                .horizontal_alignment(Horizontal::Center)
+                                .size(TEXT_SIZE),
+                        )
+                        .height(Length::FillPortion(1))
+                        .width(Length::Fill)
+                        .on_press(MainLayoutMessage::OpenTracklist),
+                    ),
+            )
+            .height(Length::Fixed(29.0));
+
         // Prepare tracklist.
         let mut tracklist_column = Column::new();
         for (id, track) in self.tracklist.iter().enumerate() {
@@ -149,10 +215,9 @@ impl MainLayout {
                             MouseArea::new(
                                 Button::new(Text::new(track.name.as_str()).size(TEXT_SIZE))
                                     .width(Length::Fill)
-                                    .on_press(MainLayoutMessage::PlayPauseTrack(id)),
+                                    .on_press(MainLayoutMessage::PlayTrackFromStart(id)),
                             )
-                            .on_right_press(MainLayoutMessage::DeleteTrack(id))
-                            .on_middle_press(MainLayoutMessage::PlayTrackFromStart(id)),
+                            .on_right_press(MainLayoutMessage::DeleteTrack(id)),
                         )
                         .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
                         .push(
@@ -179,55 +244,6 @@ impl MainLayout {
                 .width(Length::Fill)
                 .height(Length::FillPortion(TRACKLIST_HEIGHT_PORTION));
 
-        // Prepare track position block.
-        let track_pos_block = Container::new(
-            TrackPosSlider::new(
-                self.audio_player.get_current_sound_wave(),
-                self.audio_player.get_current_sound_position()
-                    / self.audio_player.get_current_sound_duration(),
-            )
-            .on_clicked(MainLayoutMessage::ChangeTrackPos),
-        )
-        .padding(1)
-        .style(container::Appearance {
-            background: Some(Background::Color(Color {
-                a: WIDGET_BACKGROUND_DARK_ALPHA,
-                ..Color::BLACK
-            })),
-            border: Border {
-                color: crate::theme::style::get_primary_color(),
-                width: 1.0,
-                radius: BORDER_RADIUS.into(),
-            },
-            ..container::Appearance::default()
-        })
-        .width(Length::Fill)
-        .height(Length::FillPortion(TRACK_POS_HEIGHT_PORTION));
-
-        // Prepare bottom block.
-        let bottom_block = Column::new().push(
-            Row::new()
-                .push(
-                    Button::new(
-                        Text::new("Save Tracklist")
-                            .horizontal_alignment(Horizontal::Center)
-                            .size(TEXT_SIZE),
-                    )
-                    .width(Length::Fill)
-                    .on_press(MainLayoutMessage::SaveTracklist),
-                )
-                .spacing(HORIZONTAL_ELEMENT_SPACING)
-                .push(
-                    Button::new(
-                        Text::new("Open Tracklist")
-                            .horizontal_alignment(Horizontal::Center)
-                            .size(TEXT_SIZE),
-                    )
-                    .width(Length::Fill)
-                    .on_press(MainLayoutMessage::OpenTracklist),
-                ),
-        );
-
         // Remove this block when Iced adds support for drag and drop on Linux.
         let temp_add_track_block = Button::new(
             Text::new("Drag and drop files here or click to add music...")
@@ -241,8 +257,8 @@ impl MainLayout {
         Column::new()
             .push(top_block)
             .push(track_pos_block)
+            .push(above_tracklist_block)
             .push(tracklist_block)
-            .push(bottom_block)
             .push(temp_add_track_block)
             .spacing(VERTICAL_ELEMENT_SPACING)
             .padding(10)
@@ -272,18 +288,10 @@ impl MainLayout {
                 self.audio_player
                     .play(self.tracklist[track_index].path.as_str());
             }
-            MainLayoutMessage::PlayPauseTrack(track_index) => {
-                if let Some(current_index) = self.current_track_index {
-                    if current_index == track_index {
-                        self.audio_player.pause_resume();
-
-                        return Command::none();
-                    }
+            MainLayoutMessage::PlayPauseCurrentTrack => {
+                if self.current_track_index.is_some() {
+                    self.audio_player.pause_resume();
                 }
-
-                self.current_track_index = Some(track_index);
-                self.audio_player
-                    .play(self.tracklist[track_index].path.as_str());
             }
             MainLayoutMessage::DeleteTrack(track_index) => {
                 // Clear current index if this is the track being played.
