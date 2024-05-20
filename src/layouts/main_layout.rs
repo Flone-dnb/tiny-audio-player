@@ -37,7 +37,6 @@ pub enum MainLayoutMessage {
     PlayPauseCurrentTrack,
     OpenTracklist,
     SaveTracklist,
-    AddMusic,
     FileDropped(PathBuf),
 }
 
@@ -228,22 +227,12 @@ impl MainLayout {
                 .width(Length::Fill)
                 .height(Length::FillPortion(TRACKLIST_HEIGHT_PORTION));
 
-        // Remove this block when Iced adds support for drag and drop on Linux.
-        let temp_add_track_block = Button::new(
-            Text::new("Drag and drop files here or click to add music...")
-                .horizontal_alignment(Horizontal::Center)
-                .size(TEXT_SIZE),
-        )
-        .width(Length::Fill)
-        .on_press(MainLayoutMessage::AddMusic);
-
         // Construct the final layout.
         Column::new()
             .push(top_block)
             .push(track_pos_block)
             .push(above_tracklist_block)
             .push(tracklist_block)
-            .push(temp_add_track_block)
             .spacing(VERTICAL_ELEMENT_SPACING)
             .padding(10)
             .into()
@@ -288,12 +277,6 @@ impl MainLayout {
             MainLayoutMessage::MoveTrackDown(track_index) => {
                 let mut audio_player = self.audio_player.lock().unwrap();
                 audio_player.move_track_down(track_index);
-            }
-            MainLayoutMessage::AddMusic => {
-                let paths = FileDialog::new().show_open_multiple_file().unwrap();
-                for path in paths {
-                    self.try_importing_track_from_path(path.as_path())
-                }
             }
             MainLayoutMessage::FileDropped(path) => {
                 self.try_importing_track_from_path(path.as_path())
