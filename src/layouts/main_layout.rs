@@ -7,6 +7,7 @@ use iced::{
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 use std::path::{Path, PathBuf};
 
+use crate::audio::audio_player::TrackInfo;
 use crate::{
     app::application::ApplicationMessage,
     audio::audio_player::AudioPlayer,
@@ -16,6 +17,7 @@ use crate::{
     },
     widgets::track_pos_slider::TrackPosSlider,
 };
+use std::sync::{Arc, Mutex};
 
 // Layout customization.
 const TITLE_BLOCK_PORTION: u16 = 7;
@@ -24,12 +26,6 @@ const VOLUME_BLOCK_PORTION: u16 = 4;
 const TRACK_POS_HEIGHT_PORTION: u16 = 2;
 const TRACKLIST_HEIGHT_PORTION: u16 = 7;
 const WIDGET_BACKGROUND_DARK_ALPHA: f32 = 0.4;
-
-#[derive(Clone)]
-struct TrackInfo {
-    name: String,
-    path: String,
-}
 
 #[derive(Debug, Clone)]
 pub enum MainLayoutMessage {
@@ -44,35 +40,32 @@ pub enum MainLayoutMessage {
     OpenTracklist,
     SaveTracklist,
     AddMusic,
-    Update,
     FileDropped(PathBuf),
 }
 
 pub struct MainLayout {
-    current_track_index: Option<usize>,
-    tracklist: Vec<TrackInfo>,
-    audio_player: AudioPlayer,
+    audio_player: Arc<Mutex<AudioPlayer>>,
 }
 
 impl MainLayout {
     pub fn new() -> Self {
         Self {
-            current_track_index: None,
-            tracklist: Vec::new(),
             audio_player: AudioPlayer::new(),
         }
     }
 
     pub fn view(&self) -> Element<MainLayoutMessage, Theme, Renderer> {
+        let audio_player = self.audio_player.lock().unwrap();
+
         // Prepare top block.
         let top_block = Row::new()
             .push(
                 Column::new()
                     .push(
                         Text::new({
-                            match self.current_track_index {
-                                None => "",
-                                Some(index) => &self.tracklist[index].name,
+                            match audio_player.get_current_track_index() {
+                                None => "".to_string(),
+                                Some(index) => audio_player.get_tracklist()[index].name.clone(),
                             }
                         })
                         .size(TEXT_SIZE),
@@ -81,10 +74,10 @@ impl MainLayout {
                     .push(
                         Text::new(format!(
                             "Time: {}:{} / {}:{}",
-                            self.audio_player.get_current_sound_position() as usize / 60,
-                            self.audio_player.get_current_sound_position() as usize % 60,
-                            self.audio_player.get_current_sound_duration() as usize / 60,
-                            self.audio_player.get_current_sound_duration() as usize % 60
+                            audio_player.get_current_sound_position() as usize / 60,
+                            audio_player.get_current_sound_position() as usize % 60,
+                            audio_player.get_current_sound_duration() as usize / 60,
+                            audio_player.get_current_sound_duration() as usize % 60
                         ))
                         .size(TEXT_SIZE),
                     )
@@ -96,7 +89,7 @@ impl MainLayout {
                     .push(
                         Text::new(format!(
                             "Playback Rate: x{:.2}",
-                            self.audio_player.get_playback_rate()
+                            audio_player.get_playback_rate()
                         ))
                         .size(TEXT_SIZE)
                         .vertical_alignment(Vertical::Center),
@@ -105,7 +98,7 @@ impl MainLayout {
                     .push(
                         Slider::new(
                             0.4..=1.4,
-                            self.audio_player.get_playback_rate(),
+                            audio_player.get_playback_rate(),
                             MainLayoutMessage::PlaybackRateChanged,
                         )
                         .step(0.01),
@@ -116,18 +109,15 @@ impl MainLayout {
             .push(
                 Column::new()
                     .push(
-                        Text::new(format!(
-                            "Volume: {:.0}%",
-                            self.audio_player.get_volume() * 100.0
-                        ))
-                        .size(TEXT_SIZE)
-                        .vertical_alignment(Vertical::Center),
+                        Text::new(format!("Volume: {:.0}%", audio_player.get_volume() * 100.0))
+                            .size(TEXT_SIZE)
+                            .vertical_alignment(Vertical::Center),
                     )
                     .spacing(VERTICAL_ELEMENT_SPACING)
                     .push(
                         Slider::new(
                             0.0..=1.25,
-                            self.audio_player.get_volume(),
+                            audio_player.get_volume(),
                             MainLayoutMessage::VolumeChanged,
                         )
                         .step(0.01),
@@ -137,12 +127,8 @@ impl MainLayout {
 
         // Prepare track position block.
         let track_pos_block = Container::new(
-            TrackPosSlider::new(
-                self.audio_player.get_current_sound_wave(),
-                self.audio_player.get_current_sound_position()
-                    / self.audio_player.get_current_sound_duration(),
-            )
-            .on_clicked(MainLayoutMessage::ChangeTrackPos),
+            TrackPosSlider::new(self.audio_player.clone())
+                .on_clicked(MainLayoutMessage::ChangeTrackPos),
         )
         .padding(1)
         .style(container::Appearance {
@@ -202,7 +188,7 @@ impl MainLayout {
 
         // Prepare tracklist.
         let mut tracklist_column = Column::new();
-        for (id, track) in self.tracklist.iter().enumerate() {
+        for (id, track) in audio_player.get_tracklist().iter().enumerate() {
             tracklist_column = tracklist_column
                 .push(
                     Row::new()
@@ -213,7 +199,7 @@ impl MainLayout {
                         .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
                         .push(
                             MouseArea::new(
-                                Button::new(Text::new(track.name.as_str()).size(TEXT_SIZE))
+                                Button::new(Text::new(track.name.clone()).size(TEXT_SIZE))
                                     .width(Length::Fill)
                                     .on_press(MainLayoutMessage::PlayTrackFromStart(id)),
                             )
@@ -268,142 +254,42 @@ impl MainLayout {
     pub fn update(&mut self, message: MainLayoutMessage) -> Command<ApplicationMessage> {
         match message {
             MainLayoutMessage::VolumeChanged(new_volume) => {
-                self.audio_player.set_volume(new_volume)
+                let mut audio_player = self.audio_player.lock().unwrap();
+                audio_player.set_volume(new_volume);
             }
             MainLayoutMessage::PlaybackRateChanged(new_rate) => {
-                self.audio_player.set_playback_rate(new_rate)
+                let mut audio_player = self.audio_player.lock().unwrap();
+                audio_player.set_playback_rate(new_rate)
             }
             MainLayoutMessage::PlayTrackFromStart(track_index) => {
-                if let Some(current_index) = self.current_track_index {
-                    if current_index == track_index {
-                        // Just restart.
-                        self.audio_player.stop();
-                        self.audio_player.play(&self.tracklist[current_index].path);
-                        return Command::none();
-                    }
-                }
-
-                // Play a new one.
-                self.current_track_index = Some(track_index);
-                self.audio_player
-                    .play(self.tracklist[track_index].path.as_str());
+                let mut audio_player = self.audio_player.lock().unwrap();
+                audio_player.play_track(track_index);
             }
             MainLayoutMessage::PlayPauseCurrentTrack => {
-                if self.current_track_index.is_some() {
-                    self.audio_player.pause_resume();
+                let mut audio_player = self.audio_player.lock().unwrap();
+                if audio_player.get_current_track_index().is_some() {
+                    audio_player.pause_resume();
+                } else {
+                    audio_player.play_track(0);
                 }
             }
             MainLayoutMessage::DeleteTrack(track_index) => {
-                // Clear current index if this is the track being played.
-                if let Some(current_index) = self.current_track_index {
-                    if current_index == track_index {
-                        self.current_track_index = None;
-                        self.audio_player.stop();
-                    }
-                }
-
-                // Remove from list.
-                self.tracklist.remove(track_index);
-
-                // Update current index (if deleted not the current track).
-                if let Some(index) = self.current_track_index {
-                    if index >= track_index {
-                        self.current_track_index = Some(index - 1);
-                    }
-                }
+                let mut audio_player = self.audio_player.lock().unwrap();
+                audio_player.remove_track(track_index);
             }
-            MainLayoutMessage::ChangeTrackPos(portion) => self.audio_player.set_current_sound_pos(
-                portion as f64 * self.audio_player.get_current_sound_duration(),
-            ),
-            MainLayoutMessage::Update => {
-                if let Some(mut track_index) = self.current_track_index {
-                    if self.audio_player.get_current_sound_position() + 0.01
-                        >= self.audio_player.get_current_sound_duration()
-                    {
-                        // Switch to the next track.
-                        if track_index + 1 == self.tracklist.len() {
-                            track_index = 0;
-                        } else {
-                            track_index += 1;
-                        }
+            MainLayoutMessage::ChangeTrackPos(portion) => {
+                let mut audio_player = self.audio_player.lock().unwrap();
 
-                        self.current_track_index = Some(track_index);
-
-                        // Play it.
-                        self.audio_player
-                            .play(self.tracklist[track_index].path.as_str());
-                    }
-                }
+                let position = portion as f64 * audio_player.get_current_sound_duration();
+                audio_player.set_current_sound_pos(position);
             }
             MainLayoutMessage::MoveTrackUp(track_index) => {
-                // Quit if only 1 track.
-                if self.tracklist.len() == 1 {
-                    return Command::none();
-                }
-
-                let mut _target_track_index = 0;
-                if track_index == 0 {
-                    // Swap first and last.
-                    _target_track_index = self.tracklist.len() - 1;
-                } else {
-                    // Swap with upper track.
-                    _target_track_index = track_index - 1;
-                }
-
-                // Swap tracks.
-                let temp = self.tracklist[_target_track_index].clone();
-                self.tracklist[_target_track_index] = self.tracklist[track_index].clone();
-                self.tracklist[track_index] = temp;
-
-                // Update current if moved current played track.
-                if let Some(current_index) = self.current_track_index {
-                    if current_index == track_index {
-                        // Moved current.
-                        self.current_track_index = Some(_target_track_index);
-                    } else if current_index == _target_track_index {
-                        // Moved some track to current.
-                        if _target_track_index == self.tracklist.len() - 1 {
-                            self.current_track_index = Some(0);
-                        } else {
-                            self.current_track_index = Some(current_index + 1);
-                        }
-                    }
-                }
+                let mut audio_player = self.audio_player.lock().unwrap();
+                audio_player.move_track_up(track_index);
             }
             MainLayoutMessage::MoveTrackDown(track_index) => {
-                // Quit if only 1 track.
-                if self.tracklist.len() == 1 {
-                    return Command::none();
-                }
-
-                let mut _target_track_index = 0;
-                if track_index == self.tracklist.len() - 1 {
-                    // Swap last and first.
-                    _target_track_index = 0;
-                } else {
-                    // Swap with lower track.
-                    _target_track_index = track_index + 1;
-                }
-
-                // Swap tracks.
-                let temp = self.tracklist[_target_track_index].clone();
-                self.tracklist[_target_track_index] = self.tracklist[track_index].clone();
-                self.tracklist[track_index] = temp;
-
-                // Update current if moved current played track.
-                if let Some(current_index) = self.current_track_index {
-                    if current_index == track_index {
-                        // Moved current.
-                        self.current_track_index = Some(_target_track_index);
-                    } else if current_index == _target_track_index {
-                        // Moved some track to current.
-                        if _target_track_index == 0 {
-                            self.current_track_index = Some(self.tracklist.len() - 1);
-                        } else {
-                            self.current_track_index = Some(current_index - 1);
-                        }
-                    }
-                }
+                let mut audio_player = self.audio_player.lock().unwrap();
+                audio_player.move_track_down(track_index);
             }
             MainLayoutMessage::AddMusic => {
                 let paths = FileDialog::new().show_open_multiple_file().unwrap();
@@ -435,8 +321,10 @@ impl MainLayout {
                 }
             }
             MainLayoutMessage::SaveTracklist => {
+                let audio_player = self.audio_player.lock().unwrap();
+
                 // Make sure the tracklist is not empty.
-                if self.tracklist.is_empty() {
+                if audio_player.get_tracklist().is_empty() {
                     MessageDialog::new()
                         .set_type(MessageType::Info)
                         .set_title("Info")
@@ -453,8 +341,8 @@ impl MainLayout {
                     .unwrap();
                 if let Some(path) = path {
                     let mut config = TracklistConfig::new();
-                    config.paths = Vec::with_capacity(self.tracklist.len());
-                    for track_info in &self.tracklist {
+                    config.paths = Vec::with_capacity(audio_player.get_tracklist().len());
+                    for track_info in audio_player.get_tracklist() {
                         config.paths.push(track_info.path.clone());
                     }
                     ConfigManager::save_tracklist(&path.as_path().display().to_string(), config);
@@ -466,9 +354,8 @@ impl MainLayout {
     }
 
     fn clear_tracklist(&mut self) {
-        self.audio_player.stop();
-        self.current_track_index = None;
-        self.tracklist.clear();
+        let mut audio_player = self.audio_player.lock().unwrap();
+        audio_player.clear_tracklist();
     }
 
     fn try_importing_track_from_path(&mut self, path: &Path) {
@@ -488,7 +375,9 @@ impl MainLayout {
             return;
         }
 
-        self.tracklist.push(TrackInfo {
+        let mut audio_player = self.audio_player.lock().unwrap();
+
+        audio_player.add_track(TrackInfo {
             name: path.file_stem().unwrap().to_str().unwrap().to_string(),
             path: path.display().to_string(),
         });

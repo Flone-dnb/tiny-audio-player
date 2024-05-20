@@ -1,69 +1,22 @@
 use kira::{
     manager::{backend::DefaultBackend, AudioManager, AudioManagerSettings},
-    sound::{
-        streaming::{StreamingSoundData, StreamingSoundHandle},
-        PlaybackState,
-    },
+    sound::{streaming::StreamingSoundData, PlaybackState},
     tween::Tween,
     Volume,
 };
 use native_dialog::MessageDialog;
-use std::io::ErrorKind;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
-use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
-use symphonia::core::{audio::SampleBuffer, errors::*};
+use std::time::Duration;
 
-pub struct CurrentSoundData {
-    pub handle: StreamingSoundHandle<kira::sound::FromFileError>,
-    pub wave: Arc<Mutex<Vec<u8>>>,
-    pub duration: f64,
-    wave_calc_thread_handle: Option<JoinHandle<()>>,
-    stop_wave_calc_signal: Arc<AtomicBool>,
-}
+use super::sound_data::CurrentSoundData;
 
-impl Drop for CurrentSoundData {
-    fn drop(&mut self) {
-        self.stop_wave_calc_signal.store(true, Ordering::SeqCst);
-        self.wave_calc_thread_handle.take().map(JoinHandle::join);
-    }
-}
-
-impl CurrentSoundData {
-    pub fn new(
-        path: &str,
-        handle: StreamingSoundHandle<kira::sound::FromFileError>,
-        duration: f64,
-    ) -> Self {
-        let wave_data = Arc::new(Mutex::new(Vec::new()));
-        let stop_signal = Arc::new(AtomicBool::new(false));
-
-        // Spawn a thread that will calculate the wave.
-        let wave_data_clone = wave_data.clone();
-        let stop_signal_clone = stop_signal.clone();
-        let path_clone = path.to_string();
-        let wave_calc_thread_handle = Some(std::thread::spawn(move || {
-            AudioPlayer::try_generating_wave_for_sound(
-                &path_clone,
-                wave_data_clone,
-                stop_signal_clone,
-            );
-        }));
-
-        Self {
-            handle,
-            wave: wave_data,
-            duration,
-            wave_calc_thread_handle,
-            stop_wave_calc_signal: stop_signal,
-        }
-    }
+#[derive(Clone)]
+pub struct TrackInfo {
+    pub name: String,
+    pub path: String,
 }
 
 pub struct AudioPlayer {
@@ -71,168 +24,23 @@ pub struct AudioPlayer {
     current_sound: Option<CurrentSoundData>,
     playback_rate: f64,
     volume: f64,
+    current_track_index: Option<usize>,
+    tracklist: Vec<TrackInfo>,
+    track_switch_thread: Option<JoinHandle<()>>,
+    stop_track_switch_thread: Arc<AtomicBool>,
+}
+
+impl Drop for AudioPlayer {
+    fn drop(&mut self) {
+        // Stop thread.
+        self.stop_track_switch_thread.store(true, Ordering::SeqCst);
+        self.track_switch_thread.take().map(JoinHandle::join);
+    }
 }
 
 impl AudioPlayer {
-    fn try_generating_wave_for_sound(
-        path: &str,
-        wave: Arc<Mutex<Vec<u8>>>,
-        should_stop: Arc<AtomicBool>,
-    ) {
-        // Open the media source.
-        let src = match std::fs::File::open(path) {
-            Ok(s) => s,
-            Err(msg) => {
-                println!("error: {}", msg);
-                return;
-            }
-        };
-
-        // Create the media source stream.
-        let mss = MediaSourceStream::new(Box::new(src), Default::default());
-
-        // Create a probe hint using the file's extension. [Optional]
-        let hint = Hint::new();
-
-        // Use the default options for metadata and format readers.
-        let meta_opts: MetadataOptions = Default::default();
-        let fmt_opts: FormatOptions = Default::default();
-
-        // Probe the media source.
-        let probed = symphonia::default::get_probe()
-            .format(&hint, mss, &fmt_opts, &meta_opts)
-            .expect("unsupported format");
-
-        // Get the instantiated format reader.
-        let mut format = probed.format;
-
-        // Find the first audio track with a known (decodeable) codec.
-        let track = match format
-            .tracks()
-            .iter()
-            .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-        {
-            Some(t) => t,
-            None => {
-                println!("unable to find a codec");
-                return;
-            }
-        };
-
-        // Use the default options for the decoder.
-        let dec_opts: DecoderOptions = Default::default();
-
-        // Create a decoder for the track.
-        let mut decoder =
-            match symphonia::default::get_codecs().make(&track.codec_params, &dec_opts) {
-                Ok(d) => d,
-                Err(msg) => {
-                    println!("error: {}", msg);
-                    return;
-                }
-            };
-
-        // Store the track identifier, it will be used to filter packets.
-        let track_id = track.id;
-
-        let packet_count_to_average: usize = 20;
-        let mut packets_to_average: Vec<f32> = Vec::with_capacity(packet_count_to_average);
-
-        // The decode loop.
-        loop {
-            // Check if we should stop.
-            if should_stop.load(Ordering::SeqCst) {
-                break;
-            }
-
-            // Get the next packet from the media format.
-            let packet = match format.next_packet() {
-                Ok(packet) => packet,
-                Err(Error::ResetRequired) => {
-                    println!("unexpected reset");
-                    return;
-                }
-                Err(Error::IoError(err)) => {
-                    if err.kind() == ErrorKind::UnexpectedEof {
-                        // Finished reading.
-                        break;
-                    }
-                    println!("error: {:?}", err);
-                    break;
-                }
-                Err(msg) => {
-                    println!("error: {:?}", msg);
-                    break;
-                }
-            };
-
-            // Consume any new metadata that has been read since the last packet.
-            while !format.metadata().is_latest() {
-                // Pop the old head of the metadata queue.
-                format.metadata().pop();
-
-                // Consume the new metadata at the head of the metadata queue.
-            }
-
-            // If the packet does not belong to the selected track, skip over it.
-            if packet.track_id() != track_id {
-                continue;
-            }
-
-            // Decode the packet into audio samples.
-            match decoder.decode(&packet) {
-                Ok(decoded_packet) => {
-                    let spec = *decoded_packet.spec();
-                    let duration = decoded_packet.capacity() as u64;
-                    let mut read_buffer = SampleBuffer::<f32>::new(duration, spec);
-                    read_buffer.copy_planar_ref(decoded_packet);
-                    let read_samples = read_buffer.samples();
-
-                    // Find mean value.
-                    let mut mean_value: f32 = 0.0;
-                    for sample in read_samples {
-                        mean_value += sample.abs();
-                    }
-                    mean_value /= read_samples.len() as f32;
-
-                    // Update "processed" count.
-                    packets_to_average.push(mean_value);
-
-                    if packets_to_average.len() >= packet_count_to_average {
-                        // Average all samples.
-                        let mut average_value = 0.0;
-                        for value in &packets_to_average {
-                            average_value += value;
-                        }
-                        average_value /= packets_to_average.len() as f32;
-                        packets_to_average.clear();
-
-                        // Add as a final sample.
-                        {
-                            let mut wave_data = wave.lock().unwrap();
-                            wave_data.push((average_value * 2.0 * u8::MAX as f32) as u8);
-                        }
-                    }
-                }
-                Err(Error::IoError(_)) => {
-                    continue;
-                }
-                Err(Error::DecodeError(_)) => {
-                    continue;
-                }
-                Err(msg) => {
-                    println!("error: {}", msg);
-                    return;
-                }
-            }
-        }
-    }
-
-    pub fn is_format_supported(extension: &str) -> bool {
-        extension == "mp3" || extension == "wav" || extension == "ogg" || extension == "flac"
-    }
-
-    pub fn new() -> Self {
+    pub fn new() -> Arc<Mutex<Self>> {
+        // Create audio manager.
         let audio_manager =
             match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
                 Err(msg) => {
@@ -246,12 +54,180 @@ impl AudioPlayer {
                 Ok(manager) => manager,
             };
 
-        Self {
+        let stop_signal = Arc::new(AtomicBool::new(false));
+        let stop_signal_clone = stop_signal.clone();
+
+        let this = Arc::new(Mutex::new(Self {
             audio_manager,
             current_sound: None,
             playback_rate: 1.0,
             volume: 1.0,
+            current_track_index: None,
+            tracklist: Vec::new(),
+            track_switch_thread: None,
+            stop_track_switch_thread: stop_signal,
+        }));
+
+        // Spawn a thread that checks if the track is finished (since I can't find a callback in audio manager).
+        let this_clone = this.clone();
+        let track_switch_thread = Some(std::thread::spawn(move || {
+            while !stop_signal_clone.load(Ordering::SeqCst) {
+                {
+                    let mut this = this_clone.lock().unwrap();
+
+                    if let Some(sound) = this.current_sound.as_ref() {
+                        if let Some(mut curren_track_index) = this.current_track_index {
+                            if sound.handle.position() + 0.01 >= sound.duration {
+                                // Switch to the next track.
+                                if curren_track_index + 1 == this.tracklist.len() {
+                                    curren_track_index = 0;
+                                } else {
+                                    curren_track_index += 1;
+                                }
+
+                                this.current_track_index = Some(curren_track_index);
+
+                                // Play it.
+                                this.play_track(curren_track_index);
+                            }
+                        }
+                    }
+                }
+
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        }));
+
+        {
+            let mut this_data = this.lock().unwrap();
+            this_data.track_switch_thread = track_switch_thread;
         }
+
+        this
+    }
+
+    pub fn is_format_supported(extension: &str) -> bool {
+        extension == "mp3" || extension == "wav" || extension == "ogg" || extension == "flac"
+    }
+
+    pub fn get_current_track_index(&self) -> Option<usize> {
+        self.current_track_index
+    }
+
+    pub fn get_tracklist(&self) -> &Vec<TrackInfo> {
+        &self.tracklist
+    }
+
+    pub fn add_track(&mut self, track: TrackInfo) {
+        self.tracklist.push(track);
+    }
+
+    pub fn clear_tracklist(&mut self) {
+        self.stop();
+        self.current_track_index = None;
+        self.tracklist.clear();
+    }
+
+    pub fn move_track_up(&mut self, track_index: usize) {
+        // Quit if only 1 track.
+        if self.tracklist.len() == 1 {
+            return;
+        }
+
+        let mut _target_track_index = 0;
+        if track_index == 0 {
+            // Swap first and last.
+            _target_track_index = self.tracklist.len() - 1;
+        } else {
+            // Swap with upper track.
+            _target_track_index = track_index - 1;
+        }
+
+        // Swap tracks.
+        let temp = self.tracklist[_target_track_index].clone();
+        self.tracklist[_target_track_index] = self.tracklist[track_index].clone();
+        self.tracklist[track_index] = temp;
+
+        // Update current if moved current played track.
+        if let Some(current_index) = self.current_track_index {
+            if current_index == track_index {
+                // Moved current.
+                self.current_track_index = Some(_target_track_index);
+            } else if current_index == _target_track_index {
+                // Moved some track to current.
+                if _target_track_index == self.tracklist.len() - 1 {
+                    self.current_track_index = Some(0);
+                } else {
+                    self.current_track_index = Some(current_index + 1);
+                }
+            }
+        }
+    }
+
+    pub fn move_track_down(&mut self, track_index: usize) {
+        // Quit if only 1 track.
+        if self.tracklist.len() == 1 {
+            return;
+        }
+
+        let mut _target_track_index = 0;
+        if track_index == self.tracklist.len() - 1 {
+            // Swap last and first.
+            _target_track_index = 0;
+        } else {
+            // Swap with lower track.
+            _target_track_index = track_index + 1;
+        }
+
+        // Swap tracks.
+        let temp = self.tracklist[_target_track_index].clone();
+        self.tracklist[_target_track_index] = self.tracklist[track_index].clone();
+        self.tracklist[track_index] = temp;
+
+        // Update current if moved current played track.
+        if let Some(current_index) = self.current_track_index {
+            if current_index == track_index {
+                // Moved current.
+                self.current_track_index = Some(_target_track_index);
+            } else if current_index == _target_track_index {
+                // Moved some track to current.
+                if _target_track_index == 0 {
+                    self.current_track_index = Some(self.tracklist.len() - 1);
+                } else {
+                    self.current_track_index = Some(current_index - 1);
+                }
+            }
+        }
+    }
+
+    pub fn remove_track(&mut self, track_index: usize) {
+        // Clear current index if this is the track being played.
+        if let Some(current_index) = self.current_track_index {
+            if current_index == track_index {
+                self.current_track_index = None;
+                self.stop();
+            }
+        }
+
+        // Remove from list.
+        self.tracklist.remove(track_index);
+
+        // Update current index (if deleted not the current track).
+        if let Some(index) = self.current_track_index {
+            if index >= track_index {
+                self.current_track_index = Some(index - 1);
+            }
+        }
+    }
+
+    pub fn play_track(&mut self, track_index: usize) {
+        // Make sure the index is not out of bounds.
+        if track_index >= self.tracklist.len() {
+            return;
+        }
+
+        self.current_track_index = Some(track_index);
+        self.play(&self.tracklist[track_index].path.clone());
     }
 
     pub fn play(&mut self, path: &str) {
@@ -297,7 +273,7 @@ impl AudioPlayer {
     }
 
     pub fn get_current_sound_wave(&self) -> Arc<Mutex<Vec<u8>>> {
-        if let Some(data) = &self.current_sound {
+        if let Some(data) = self.current_sound.as_ref() {
             return data.wave.clone();
         }
 
@@ -386,6 +362,7 @@ impl AudioPlayer {
 
     /// Sets playback speed multiplier where 1.0 is "original speed".
     pub fn set_playback_rate(&mut self, rate: f64) {
+        // Save rate.
         self.playback_rate = rate;
 
         // Quit if no sound.
@@ -393,6 +370,7 @@ impl AudioPlayer {
             return;
         }
 
+        // Set playback rate.
         self.current_sound
             .as_mut()
             .unwrap()

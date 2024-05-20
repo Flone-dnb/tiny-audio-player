@@ -2,38 +2,33 @@ use iced::advanced::graphics::core::event;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
+use iced::window::RedrawRequest;
 use iced::{mouse, Element, Event, Shadow};
 use iced::{Border, Color, Length, Rectangle, Size};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
+use crate::audio::audio_player::AudioPlayer;
 use crate::theme;
 
+const REDRAW_INTERVAL_MS: u64 = 250;
+
 pub struct TrackPosSlider<Message> {
-    audio_data: Arc<Mutex<Vec<u8>>>,
-    current_pos_portion: f64,
+    audio_player: Arc<Mutex<AudioPlayer>>,
     on_clicked: Option<Box<dyn FnMut(f32) -> Message>>,
-    on_redraw: Option<Box<dyn FnMut() -> Message>>,
 }
 
 impl<Message> TrackPosSlider<Message> {
-    pub fn new(audio_data: Arc<Mutex<Vec<u8>>>, current_pos_portion: f64) -> Self {
+    pub fn new(audio_player: Arc<Mutex<AudioPlayer>>) -> Self {
         Self {
-            audio_data,
-            current_pos_portion,
+            audio_player,
             on_clicked: None,
-            on_redraw: None,
         }
     }
 
     #[must_use]
     pub fn on_clicked<CB: 'static + Fn(f32) -> Message>(mut self, callback: CB) -> Self {
         self.on_clicked = Some(Box::new(callback));
-        self
-    }
-
-    #[must_use]
-    pub fn on_redraw<CB: 'static + Fn() -> Message>(mut self, callback: CB) -> Self {
-        self.on_redraw = Some(Box::new(callback));
         self
     }
 }
@@ -78,6 +73,11 @@ where
             }
         }
 
+        // Queue a new redraw later.
+        shell.request_redraw(RedrawRequest::At(
+            Instant::now() + Duration::from_millis(REDRAW_INTERVAL_MS),
+        ));
+
         event::Status::Ignored
     }
 
@@ -91,7 +91,12 @@ where
         _cursor: mouse::Cursor,
         _viewport: &Rectangle,
     ) {
-        let audio_data = self.audio_data.lock().unwrap();
+        let audio_player = self.audio_player.lock().unwrap();
+        let sound_wave = audio_player.get_current_sound_wave();
+        let audio_data = sound_wave.lock().unwrap();
+
+        let current_pos_portion =
+            audio_player.get_current_sound_position() / audio_player.get_current_sound_duration();
 
         let layout_bounds = layout.bounds();
         let step_width = layout_bounds.width / audio_data.len() as f32;
@@ -127,7 +132,7 @@ where
                 bounds: Rectangle {
                     x: layout_bounds.x,
                     y: layout_bounds.y,
-                    width: layout_bounds.width * self.current_pos_portion as f32,
+                    width: layout_bounds.width * current_pos_portion as f32,
                     height: layout_bounds.height,
                 },
                 border: Border {
