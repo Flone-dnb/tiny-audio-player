@@ -5,6 +5,8 @@ use kira::{
     Volume,
 };
 use native_dialog::MessageDialog;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -100,13 +102,20 @@ impl AudioPlayer {
 
         {
             let mut this_data = this.lock().unwrap();
+
+            // Save thread handle.
             this_data.track_switch_thread = track_switch_thread;
+
+            // See if a command line argument was provided.
+            if let Some(path) = std::env::args().nth(1) {
+                this_data.add_track(PathBuf::from(path).as_path());
+            }
         }
 
         this
     }
 
-    pub fn is_format_supported(extension: &str) -> bool {
+    fn is_format_supported(extension: &str) -> bool {
         extension == "mp3" || extension == "wav" || extension == "ogg" || extension == "flac"
     }
 
@@ -118,8 +127,27 @@ impl AudioPlayer {
         &self.tracklist
     }
 
-    pub fn add_track(&mut self, track: TrackInfo) {
-        self.tracklist.push(track);
+    pub fn add_track(&mut self, path: &Path) {
+        // Make sure it's a file.
+        if !path.is_file() {
+            return;
+        }
+
+        // Get file extension.
+        let file_extension = match path.extension() {
+            None => return,
+            Some(ext) => ext,
+        };
+
+        // Make sure it has a correct extension.
+        if !Self::is_format_supported(file_extension.to_str().unwrap()) {
+            return;
+        }
+
+        self.tracklist.push(TrackInfo {
+            name: path.file_stem().unwrap().to_str().unwrap().to_string(),
+            path: path.display().to_string(),
+        });
     }
 
     pub fn clear_tracklist(&mut self) {

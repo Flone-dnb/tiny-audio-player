@@ -1,7 +1,9 @@
+use super::process_message_listener::ProcessMessageListener;
 use crate::layouts::main_layout::*;
 use iced::{
     event, executor, window, Application, Command, Element, Event, Renderer, Subscription, Theme,
 };
+use std::path::PathBuf;
 use std::time::Instant;
 
 /// Send refresh UI messages every N seconds.
@@ -23,6 +25,8 @@ pub struct ApplicationState {
     current_layout: Layout,
 
     main_layout: MainLayout,
+
+    process_message_listener: ProcessMessageListener,
 }
 
 impl Application for ApplicationState {
@@ -32,10 +36,17 @@ impl Application for ApplicationState {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<ApplicationMessage>) {
+        let listener = ProcessMessageListener::new();
+        if listener.is_none() {
+            // Exit.
+            std::process::exit(0);
+        }
+
         (
             Self {
                 current_layout: Layout::Main,
                 main_layout: MainLayout::new(),
+                process_message_listener: listener.unwrap(),
             },
             Command::none(),
         )
@@ -83,7 +94,14 @@ impl Application for ApplicationState {
                 }
                 _ => Command::none(),
             },
-            ApplicationMessage::VisualUpdate(_) => Command::none(),
+            ApplicationMessage::VisualUpdate(_) => {
+                let paths = self.process_message_listener.process_messages();
+                for path in paths {
+                    self.main_layout
+                        .try_importing_track_from_path(PathBuf::from(path).as_path());
+                }
+                Command::none()
+            }
         }
     }
 

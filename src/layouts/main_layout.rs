@@ -1,13 +1,3 @@
-use iced::widget::svg;
-use iced::{
-    alignment::{Horizontal, Vertical},
-    widget::{container, Button, Column, Container, MouseArea, Row, Scrollable, Slider, Text},
-    Background, Border, Color, Command, Element, Length, Renderer, Theme,
-};
-use native_dialog::{FileDialog, MessageDialog, MessageType};
-use std::path::{Path, PathBuf};
-
-use crate::audio::audio_player::TrackInfo;
 use crate::{
     app::application::ApplicationMessage,
     audio::audio_player::AudioPlayer,
@@ -17,6 +7,14 @@ use crate::{
     },
     widgets::track_pos_slider::TrackPosSlider,
 };
+use iced::widget::svg;
+use iced::{
+    alignment::{Horizontal, Vertical},
+    widget::{container, Button, Column, Container, MouseArea, Row, Scrollable, Slider, Text},
+    Background, Border, Color, Command, Element, Length, Renderer, Theme,
+};
+use native_dialog::{FileDialog, MessageDialog, MessageType};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 // Layout customization.
@@ -358,28 +356,8 @@ impl MainLayout {
         audio_player.clear_tracklist();
     }
 
-    fn try_importing_track_from_path(&mut self, path: &Path) {
-        // Make sure it's a file.
-        if !path.is_file() {
-            return;
-        }
-
-        // Get file extension.
-        let file_extension = match path.extension() {
-            None => return,
-            Some(ext) => ext,
-        };
-
-        // Make sure it has a correct extension.
-        if !AudioPlayer::is_format_supported(file_extension.to_str().unwrap()) {
-            return;
-        }
-
+    pub fn try_importing_track_from_path(&mut self, path: &Path) {
         let mut audio_player = self.audio_player.lock().unwrap();
-
-        audio_player.add_track(TrackInfo {
-            name: path.file_stem().unwrap().to_str().unwrap().to_string(),
-            path: path.display().to_string(),
-        });
+        audio_player.add_track(path);
     }
 }
