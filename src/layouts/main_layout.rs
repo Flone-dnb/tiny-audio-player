@@ -157,15 +157,16 @@ impl MainLayout {
                                 .size(TEXT_SIZE),
                         )
                         .height(Length::FillPortion(1))
-                        .width(Length::Fill)
+                        .width(Length::FillPortion(5))
                         .on_press(MainLayoutMessage::SaveTracklist),
                     )
                     .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
                     .push(
                         Button::new(
                             svg(play_pause_svg_handle)
-                                .width(Length::Shrink)
-                                .height(Length::FillPortion(1)),
+                                .width(Length::FillPortion(1))
+                                .height(Length::FillPortion(1))
+                                .content_fit(iced::ContentFit::ScaleDown),
                         )
                         .on_press(MainLayoutMessage::PlayPauseCurrentTrack),
                     )
@@ -177,7 +178,7 @@ impl MainLayout {
                                 .size(TEXT_SIZE),
                         )
                         .height(Length::FillPortion(1))
-                        .width(Length::Fill)
+                        .width(Length::FillPortion(5))
                         .on_press(MainLayoutMessage::OpenTracklist),
                     ),
             )
