@@ -17,6 +17,8 @@ use native_dialog::{FileDialog, MessageDialog, MessageType};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+const PLAY_PAUSE_SVG: &[u8] = include_bytes!("../../res/play-pause.svg");
+
 // Layout customization.
 const TITLE_BLOCK_PORTION: u16 = 7;
 const PLAYBACK_RATE_BLOCK_PORTION: u16 = 4;
@@ -143,9 +145,6 @@ impl MainLayout {
         .width(Length::Fill)
         .height(Length::FillPortion(TRACK_POS_HEIGHT_PORTION));
 
-        let play_pause_svg_handle =
-            svg::Handle::from_path(format!("{}/res/play-pause.svg", env!("CARGO_MANIFEST_DIR")));
-
         // Prepare block above tracklist.
         let above_tracklist_block = Column::new()
             .push(
@@ -163,7 +162,7 @@ impl MainLayout {
                     .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
                     .push(
                         Button::new(
-                            svg(play_pause_svg_handle)
+                            svg(svg::Handle::from_memory(PLAY_PAUSE_SVG))
                                 .width(Length::FillPortion(1))
                                 .height(Length::FillPortion(1))
                                 .content_fit(iced::ContentFit::ScaleDown),
