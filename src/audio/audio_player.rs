@@ -1,9 +1,5 @@
-use kira::{
-    manager::{backend::DefaultBackend, AudioManager, AudioManagerSettings},
-    sound::{streaming::StreamingSoundData, PlaybackState},
-    tween::Tween,
-    Volume,
-};
+use kira::sound::{streaming::StreamingSoundData, PlaybackState};
+use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend, Tween};
 use native_dialog::MessageDialog;
 use std::path::Path;
 use std::path::PathBuf;
@@ -378,9 +374,12 @@ impl AudioPlayer {
     pub fn set_volume(&mut self, volume: f64) {
         self.volume = volume;
 
+        // Convert from linear to decibels.
+        let decibels = 20.0 * volume.log10();
+
         self.audio_manager
             .main_track()
-            .set_volume(Volume::Amplitude(volume), Tween::default())
+            .set_volume(decibels as f32, Tween::default())
     }
 
     /// Returns volume multiplier.

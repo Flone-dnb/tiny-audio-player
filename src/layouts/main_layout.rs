@@ -7,12 +7,12 @@ use crate::{
     },
     widgets::track_pos_slider::TrackPosSlider,
 };
-use iced::widget::svg;
 use iced::{
     alignment::{Horizontal, Vertical},
-    widget::{container, Button, Column, Container, MouseArea, Row, Scrollable, Slider, Text},
-    Background, Border, Color, Command, Element, Length, Renderer, Theme,
+    widget::{text::Shaping, Button, Column, Container, MouseArea, Row, Scrollable, Slider, Text},
+    Background, Border, Color, Element, Length, Renderer, Shadow, Theme,
 };
+use iced::{widget::svg, Task};
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -67,6 +67,7 @@ impl MainLayout {
                                 Some(index) => audio_player.get_tracklist()[index].name.clone(),
                             }
                         })
+                        .shaping(Shaping::Advanced)
                         .size(TEXT_SIZE),
                     )
                     .spacing(VERTICAL_ELEMENT_SPACING)
@@ -91,7 +92,7 @@ impl MainLayout {
                             audio_player.get_playback_rate()
                         ))
                         .size(TEXT_SIZE)
-                        .vertical_alignment(Vertical::Center),
+                        .align_y(Vertical::Center),
                     )
                     .spacing(VERTICAL_ELEMENT_SPACING)
                     .push(
@@ -110,7 +111,7 @@ impl MainLayout {
                     .push(
                         Text::new(format!("Volume: {:.0}%", audio_player.get_volume() * 100.0))
                             .size(TEXT_SIZE)
-                            .vertical_alignment(Vertical::Center),
+                            .align_y(Vertical::Center),
                     )
                     .spacing(VERTICAL_ELEMENT_SPACING)
                     .push(
@@ -130,7 +131,8 @@ impl MainLayout {
                 .on_clicked(MainLayoutMessage::ChangeTrackPos),
         )
         .padding(1)
-        .style(container::Appearance {
+        .style(|_| iced::widget::container::Style {
+            text_color: None,
             background: Some(Background::Color(Color {
                 a: WIDGET_BACKGROUND_DARK_ALPHA,
                 ..Color::BLACK
@@ -140,7 +142,7 @@ impl MainLayout {
                 width: 1.0,
                 radius: BORDER_RADIUS.into(),
             },
-            ..container::Appearance::default()
+            shadow: Shadow::default(),
         })
         .width(Length::Fill)
         .height(Length::FillPortion(TRACK_POS_HEIGHT_PORTION));
@@ -152,7 +154,7 @@ impl MainLayout {
                     .push(
                         Button::new(
                             Text::new("Save Tracklist")
-                                .horizontal_alignment(Horizontal::Center)
+                                .align_x(Horizontal::Center)
                                 .size(TEXT_SIZE),
                         )
                         .height(Length::FillPortion(1))
@@ -173,7 +175,7 @@ impl MainLayout {
                     .push(
                         Button::new(
                             Text::new("Open Tracklist")
-                                .horizontal_alignment(Horizontal::Center)
+                                .align_x(Horizontal::Center)
                                 .size(TEXT_SIZE),
                         )
                         .height(Length::FillPortion(1))
@@ -196,9 +198,13 @@ impl MainLayout {
                         .spacing(HORIZONTAL_ELEMENT_SPACING / 4)
                         .push(
                             MouseArea::new(
-                                Button::new(Text::new(track.name.clone()).size(TEXT_SIZE))
-                                    .width(Length::Fill)
-                                    .on_press(MainLayoutMessage::PlayTrackFromStart(id)),
+                                Button::new(
+                                    Text::new(track.name.clone())
+                                        .shaping(Shaping::Advanced)
+                                        .size(TEXT_SIZE),
+                                )
+                                .width(Length::Fill)
+                                .on_press(MainLayoutMessage::PlayTrackFromStart(id)),
                             )
                             .on_right_press(MainLayoutMessage::DeleteTrack(id)),
                         )
@@ -212,7 +218,8 @@ impl MainLayout {
         }
         let tracklist_block =
             Container::new(Scrollable::new(tracklist_column.padding(10)).height(Length::Fill))
-                .style(container::Appearance {
+                .style(|_| iced::widget::container::Style {
+                    text_color: None,
                     background: Some(Background::Color(Color {
                         a: WIDGET_BACKGROUND_DARK_ALPHA,
                         ..Color::BLACK
@@ -222,7 +229,7 @@ impl MainLayout {
                         width: 1.0,
                         radius: BORDER_RADIUS.into(),
                     },
-                    ..container::Appearance::default()
+                    shadow: Shadow::default(),
                 })
                 .width(Length::Fill)
                 .height(Length::FillPortion(TRACKLIST_HEIGHT_PORTION));
@@ -238,7 +245,7 @@ impl MainLayout {
             .into()
     }
 
-    pub fn update(&mut self, message: MainLayoutMessage) -> Command<ApplicationMessage> {
+    pub fn update(&mut self, message: MainLayoutMessage) -> Task<ApplicationMessage> {
         match message {
             MainLayoutMessage::VolumeChanged(new_volume) => {
                 let mut audio_player = self.audio_player.lock().unwrap();
@@ -312,7 +319,7 @@ impl MainLayout {
                         .set_text("Tracklist is empty - there is nothing to save!")
                         .show_alert()
                         .unwrap();
-                    return Command::none();
+                    return Task::none();
                 }
 
                 // Ask for path.
@@ -331,7 +338,7 @@ impl MainLayout {
             }
         }
 
-        Command::none()
+        Task::none()
     }
 
     fn clear_tracklist(&mut self) {

@@ -1,8 +1,6 @@
 use super::process_message_listener::ProcessMessageListener;
 use crate::layouts::main_layout::*;
-use iced::{
-    event, executor, window, Application, Command, Element, Event, Renderer, Subscription, Theme,
-};
+use iced::{event, window, Element, Event, Renderer, Subscription, Task, Theme};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -29,13 +27,8 @@ pub struct ApplicationState {
     process_message_listener: ProcessMessageListener,
 }
 
-impl Application for ApplicationState {
-    type Message = ApplicationMessage;
-    type Theme = Theme;
-    type Executor = executor::Default;
-    type Flags = ();
-
-    fn new(_flags: ()) -> (Self, Command<ApplicationMessage>) {
+impl ApplicationState {
+    pub fn new() -> (Self, Task<ApplicationMessage>) {
         let listener = ProcessMessageListener::new();
         if listener.is_none() {
             // Exit.
@@ -48,11 +41,11 @@ impl Application for ApplicationState {
                 main_layout: MainLayout::new(),
                 process_message_listener: listener.unwrap(),
             },
-            Command::none(),
+            Task::none(),
         )
     }
 
-    fn theme(&self) -> Theme {
+    pub fn theme(&self) -> Theme {
         iced::theme::Theme::Custom(
             iced::theme::Custom::new(
                 "Dark Orange".to_string(),
@@ -62,11 +55,11 @@ impl Application for ApplicationState {
         )
     }
 
-    fn title(&self) -> String {
+    pub fn title(&self) -> String {
         format!("Tiny Audio Player v{}", env!("CARGO_PKG_VERSION"))
     }
 
-    fn view(&self) -> Element<ApplicationMessage, Theme, Renderer> {
+    pub fn view(&self) -> Element<ApplicationMessage, Theme, Renderer> {
         match self.current_layout {
             Layout::Main => self
                 .main_layout
@@ -75,13 +68,13 @@ impl Application for ApplicationState {
         }
     }
 
-    fn update(&mut self, message: ApplicationMessage) -> Command<ApplicationMessage> {
+    pub fn update(&mut self, message: ApplicationMessage) -> Task<ApplicationMessage> {
         match message {
             ApplicationMessage::MainLayoutMessage(message) => self.main_layout.update(message),
             ApplicationMessage::OsEvent(os_event) => match os_event {
-                Event::Window(_, event) => {
+                Event::Window(event) => {
                     if let window::Event::FileHovered(_) = event {
-                        return Command::none();
+                        return Task::none();
                     }
 
                     if let window::Event::FileDropped(path) = event {
@@ -90,9 +83,9 @@ impl Application for ApplicationState {
                             .update(MainLayoutMessage::FileDropped(path));
                     }
 
-                    Command::none()
+                    Task::none()
                 }
-                _ => Command::none(),
+                _ => Task::none(),
             },
             ApplicationMessage::VisualUpdate(_) => {
                 let paths = self.process_message_listener.process_messages();
@@ -100,12 +93,12 @@ impl Application for ApplicationState {
                     self.main_layout
                         .try_importing_track_from_path(PathBuf::from(path).as_path());
                 }
-                Command::none()
+                Task::none()
             }
         }
     }
 
-    fn subscription(&self) -> Subscription<ApplicationMessage> {
+    pub fn subscription(&self) -> Subscription<ApplicationMessage> {
         let tick = iced::time::every(std::time::Duration::from_secs(
             APP_VISUAL_UPDATE_INTERVAL_SEC,
         ))

@@ -1,11 +1,7 @@
-#![deny(warnings)]
 #![windows_subsystem = "windows"] // don't show a console when opening the app on windows
 
 use app::application::ApplicationState;
-use iced::{
-    window::{self, Position},
-    Application, Size,
-};
+use iced::Font;
 
 mod app;
 mod audio;
@@ -15,23 +11,15 @@ mod theme;
 mod widgets;
 
 fn main() -> iced::Result {
-    // Prepare initial window size.
-    let window_size = Size {
-        width: 700,
-        height: 400,
-    };
-
-    // Prepare window settings.
-    let window_settings = window::Settings {
-        size: Size::new(window_size.width as f32, window_size.height as f32),
-        position: Position::Centered,
-        ..window::Settings::default()
-    };
-
-    // Run app.
-    ApplicationState::run(iced::Settings {
-        antialiasing: true,
-        window: window_settings,
-        ..iced::Settings::default()
-    })
+    iced::application(
+        ApplicationState::title,
+        ApplicationState::update,
+        ApplicationState::view,
+    )
+    .subscription(ApplicationState::subscription)
+    .theme(ApplicationState::theme)
+    .window_size((700.0, 400.0))
+    .antialiasing(true)
+    .centered()
+    .run_with(ApplicationState::new)
 }
